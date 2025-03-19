@@ -355,12 +355,19 @@ class Chore(RestoreEntity):
                 yield datetime.strptime(add_date_str, "%Y-%m-%d").date()
         return
 
+    async def complete(self, last_completed: datetime) -> None:
+        """Mark the chore as completed and update the state."""
+        self.last_completed = last_completed
+        await self._async_load_due_dates()
+        self.update_state()
+
     async def _async_load_due_dates(self) -> None:
-        """Fill the chore dates list."""
-        self._due_dates.clear()
-        for chore_date in self.chore_schedule():
-            self._due_dates.append(chore_date)
-        self._due_dates.sort()
+        """Load due dates based on the last completed date."""
+        if self.last_completed is None:
+            LOGGER.warning("Chore (%s) last_completed is None, using start_date to calculate due dates", self._attr_name)
+            self._due_dates = [self._add_period_offset(self._start_date)]
+        else:
+            self._due_dates = [self._add_period_offset(self.last_completed.date())]
 
     async def add_date(self, chore_date: date) -> None:
         """Add date to due dates."""
@@ -496,32 +503,18 @@ class Chore(RestoreEntity):
             self._overdue = False
             self._overdue_days = None
 
-        start_date = self._calculate_start_date()
-        if self._add_dates is not None:
-            self._add_dates = " ".join(
-                [
-                    x
-                    for x in self._add_dates.split(" ")
-                    if datetime.strptime(x, "%Y-%m-%d").date() >= start_date
-                ]
-            )
-        if self._remove_dates is not None:
-            self._remove_dates = " ".join(
-                [
-                    x
-                    for x in self._remove_dates.split(" ")
-                    if datetime.strptime(x, "%Y-%m-%d").date() >= start_date
-                ]
-            )
-        if self._offset_dates is not None:
-            self._offset_dates = " ".join(
-                [
-                    x
-                    for x in self._offset_dates.split(" ")
-                    if datetime.strptime(x.split(":")[0], "%Y-%m-%d").date()
-                    >= start_date
-                ]
-            )
+        # Add configuration attributes
+        self._attr_extra_state_attributes = {
+            # "frequency_type": self._frequency_type,
+            "period": self._period,
+            "start_date": self._start_date,
+            "last_completed": self.last_completed,
+            "next_due_date": self._next_due_date,
+            "overdue": self._overdue,
+            "overdue_days": self._overdue_days,
+        }
+
+
 
     def calculate_day1(self, day1: date, schedule_start_date: date) -> date:
         """Calculate day1."""
@@ -572,5 +565,8 @@ class Chore(RestoreEntity):
 
         return start_date
 
+    # def _add_period_offset(self, start_date: date) -> date:
+    #     return start_date + timedelta(days=1)
     def _add_period_offset(self, start_date: date) -> date:
-        return start_date + timedelta(days=1)
+        """Add the period offset to the start date."""
+        return start_date + timedelta(days=self._period)
