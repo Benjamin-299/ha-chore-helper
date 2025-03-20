@@ -25,10 +25,12 @@ class WeeklyChore(Chore):
         self._period: int
         self._first_week: int
         config.get(const.CONF_FREQUENCY)
-        self._period = config.get(const.CONF_PERIOD, 1)
+        self._period = config.get(const.CONF_PERIOD, 1)  # Default to 1 if not provided
         self._first_week = config.get(const.CONF_FIRST_WEEK, 1)
 
     def _add_period_offset(self, start_date: date) -> date:
+        if self._period is None:
+            raise ValueError(f"({self._attr_name}) Period is not configured.")
         return start_date + relativedelta(weeks=self._period)
 
     def _find_candidate_date(self, day1: date) -> date | None:

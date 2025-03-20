@@ -27,7 +27,10 @@ def to_date(day: Any) -> date:
         return day
     if isinstance(day, datetime):
         return day.date()
-    return date.fromisoformat(day)
+    try:
+        return date.fromisoformat(day)
+    except ValueError as error:
+        raise ValueError(f"Invalid date format: {day}") from error
 
 
 def parse_datetime(text: str) -> datetime | None:

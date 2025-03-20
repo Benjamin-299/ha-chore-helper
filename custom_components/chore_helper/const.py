@@ -23,6 +23,13 @@ ATTR_OFFSET_DATES = "offset_dates"
 ATTR_ADD_DATES = "add_dates"
 ATTR_REMOVE_DATES = "remove_dates"
 
+# New attributes for initial settings
+ATTR_FREQUENCY = "frequency"
+ATTR_START_DATE = "start_date"
+ATTR_FORECAST_DATES = "forecast_dates"
+ATTR_DATE_FORMAT = "date_format"
+ATTR_SHOW_OVERDUE_TODAY = "show_overdue_today"
+
 BINARY_SENSOR_DEVICE_CLASS = "connectivity"
 DEVICE_CLASS = "chore_helper__schedule"
 
@@ -59,7 +66,7 @@ DEFAULT_FREQUENCY = "every-n-days"
 DEFAULT_PERIOD = 1
 DEFAULT_FIRST_WEEK = 1
 DEFAULT_DATE_FORMAT = "%b-%d-%Y"
-DEFAULT_FORECAST_DATES = 10
+DEFAULT_FORECAST_DATES = 1
 DEFAULT_SHOW_OVERDUE_TODAY = False
 
 DEFAULT_ICON_NORMAL = "mdi:broom"

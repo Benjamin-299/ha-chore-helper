@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-# import uuid
 from collections.abc import Mapping
 from typing import Any, cast
 
