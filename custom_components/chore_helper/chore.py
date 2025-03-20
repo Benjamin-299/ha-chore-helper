@@ -14,6 +14,8 @@ from homeassistant.const import (
     CONF_NAME,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.util.dt import now as ha_now  # Import Home Assistant's timezone-aware `now`
+from homeassistant.util.dt import as_local  # Import function to convert to local timezone
 
 from . import const, helpers
 from .const import LOGGER
@@ -242,7 +244,7 @@ class Chore(RestoreEntity):
             const.ATTR_LAST_UPDATED: self.last_updated,
             const.ATTR_OVERDUE: self.overdue,
             const.ATTR_OVERDUE_DAYS: self.overdue_days,
-            const.ATTR_NEXT_DATE: self.next_due_date,
+            const.ATTR_NEXT_DATE: as_local(datetime.combine(self.next_due_date, time.min)) if self.next_due_date else None,
             const.ATTR_OFFSET_DATES: self.offset_dates,
             const.ATTR_ADD_DATES: self.add_dates,
             const.ATTR_REMOVE_DATES: self.remove_dates,
@@ -284,9 +286,9 @@ class Chore(RestoreEntity):
         """Check if the entity is ready for the update.
 
         Skip the update if the sensor was updated today
-        Except for the sensors with with next date today and after the expiration time
+        Except for the sensors with next date today and after the expiration time
         """
-        current_date_time = helpers.now()
+        current_date_time = ha_now()  # Use timezone-aware `now`
         today = current_date_time.date()
         try:
             ready_for_update = bool(self._last_updated.date() != today)  # type: ignore
@@ -456,7 +458,14 @@ class Chore(RestoreEntity):
 
     def get_next_due_date(self, start_date: date, ignore_today=False) -> date | None:
         """Get next date from self._due_dates."""
-        current_date_time = helpers.now()
+        current_date_time = ha_now()  # Use timezone-aware `now`
+        LOGGER.debug(
+            "(%s) Calculating next due date: start_date=%s, ignore_today=%s, due_dates=%s",
+            self._attr_name,
+            start_date,
+            ignore_today,
+            self._due_dates,
+        )
         for d in self._due_dates:  # pylint: disable=invalid-name
             if d < start_date:
                 continue
@@ -469,7 +478,9 @@ class Chore(RestoreEntity):
                     and current_date_time.time() >= self.last_completed.time()
                 ):
                     continue
+            LOGGER.debug("(%s) Next due date found: %s", self._attr_name, d)
             return d
+        LOGGER.debug("(%s) No next due date found.", self._attr_name)
         return None
 
     async def async_update(self) -> None:
@@ -494,7 +505,7 @@ class Chore(RestoreEntity):
     def update_state(self) -> None:
         """Pick the first event from chore dates, update attributes."""
         LOGGER.debug("(%s) Looking for next chore date", self._attr_name)
-        self._last_updated = helpers.now()
+        self._last_updated = ha_now()  # Use timezone-aware `now`
         today = self._last_updated.date()
         self._next_due_date = self.get_next_due_date(self._calculate_start_date())
         if self._next_due_date is not None:
@@ -544,8 +555,6 @@ class Chore(RestoreEntity):
             "overdue_days": self._overdue_days,
         }
 
-
-
     def calculate_day1(self, day1: date, schedule_start_date: date) -> date:
         """Calculate day1."""
         start_date = self._calculate_start_date()
@@ -594,21 +603,17 @@ class Chore(RestoreEntity):
                 start_date = earliest_date
 
         return start_date
-        """Add the period offset to the start date."""
 
     def _add_period_offset(self, start_date: date) -> date:
         """Add the period offset to the start date."""
         if not hasattr(self, "_period") or self._period is None:
             raise ValueError(f"({self._attr_name}) Period is not configured.")
-        return start_date + timedelta(days=self._period)
-
-        return start_date
-
-    def _add_period_offset(self, start_date: date) -> date:
-        """Add the period offset to the start date."""
-        if not hasattr(self, "_period") or self._period is None:
-            raise ValueError(f"({self._attr_name}) Period is not configured.")
-        return start_date + timedelta(days=self._period)
-        if not hasattr(self, "_period") or self._period is None:
-            raise ValueError(f"({self._attr_name}) Period is not configured.")
-        return start_date + timedelta(days=self._period)
+        next_date = start_date + timedelta(days=self._period)
+        LOGGER.debug(
+            "(%s) Adding period offset: start_date=%s, period=%d, next_date=%s",
+            self._attr_name,
+            start_date,
+            self._period,
+            next_date,
+        )
+        return next_date

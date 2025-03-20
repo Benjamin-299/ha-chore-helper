@@ -4,6 +4,7 @@ from . import helpers
 from datetime import date, timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.util.dt import now as ha_now  # Import Home Assistant's timezone-aware `now`
 
 class DailyChore(Chore):
     """Entity for a daily chore."""
@@ -48,7 +49,7 @@ class DailyChore(Chore):
             return
 
         LOGGER.debug("(%s) Looking for next chore date", self._attr_name)
-        self._last_updated = helpers.now()
+        self._last_updated = ha_now()  # Use timezone-aware `now`
         today = self._last_updated.date()
         self._next_due_date = self.get_next_due_date(self._calculate_start_date())
         if self._next_due_date is not None:
@@ -134,7 +135,15 @@ class DailyChore(Chore):
                 "for every-n-days or after-n-days chore frequency."
             ) from error
 
-        return day1 + relativedelta(days=offset)
+        candidate_date = day1 + relativedelta(days=offset)
+        LOGGER.debug(
+            "(%s) Calculated candidate date: day1=%s, schedule_start_date=%s, candidate_date=%s",
+            self._attr_name,
+            day1,
+            schedule_start_date,
+            candidate_date,
+        )
+        return candidate_date
 
     async def complete(self, last_completed: datetime) -> None:
         """Mark the chore as completed and update the state."""
@@ -146,6 +155,3 @@ class DailyChore(Chore):
                 self._attr_name,
             )
         self.update_state()
-
-    def _add_period_offset(self, start_date: date) -> date:
-        return start_date + timedelta(days=self._period)
