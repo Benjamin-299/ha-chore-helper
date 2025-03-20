@@ -104,8 +104,15 @@ class DailyChore(Chore):
         schedule_start_date = self._calculate_schedule_start_date()
         day1 = self.calculate_day1(day1, schedule_start_date)
 
+        if schedule_start_date is None or self._period is None:
+            LOGGER.error(
+                "(%s) Missing schedule_start_date or period configuration.",
+                self._attr_name,
+            )
+            return None
+
         try:
-            remainder = (day1 - schedule_start_date).days % self._period  # type: ignore
+            remainder = (day1 - schedule_start_date).days % self._period
             if remainder == 0:
                 return day1
             offset = self._period - remainder
@@ -116,6 +123,17 @@ class DailyChore(Chore):
             ) from error
 
         return day1 + relativedelta(days=offset)
+
+    async def complete(self, last_completed: datetime) -> None:
+        """Mark the chore as completed and update the state."""
+        self.last_completed = last_completed
+        await self._async_load_due_dates()
+        if not self._due_dates:
+            LOGGER.warning(
+                "(%s) No due dates calculated after completion. Check configuration.",
+                self._attr_name,
+            )
+        self.update_state()
 
     def _add_period_offset(self, start_date: date) -> date:
         return start_date + timedelta(days=self._period)

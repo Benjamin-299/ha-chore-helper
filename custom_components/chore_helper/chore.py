@@ -108,6 +108,16 @@ class Chore(RestoreEntity):
     async def async_added_to_hass(self) -> None:
         """When sensor is added to HA, restore state and add it to calendar."""
         await super().async_added_to_hass()
+
+        # Ensure entity_id is assigned
+        if not self.entity_id:
+            self.entity_id = self.registry_entry.entity_id if self.registry_entry else None
+            if not self.entity_id:
+                LOGGER.error("Entity ID is not assigned for %s", self._attr_name)
+                return
+
+        LOGGER.debug("Entity ID assigned: %s", self.entity_id)
+
         self.hass.data[const.DOMAIN][const.SENSOR_PLATFORM][self.entity_id] = self
 
         # Restore stored state
@@ -364,17 +374,26 @@ class Chore(RestoreEntity):
 
     async def complete(self, last_completed: datetime) -> None:
         """Mark the chore as completed and update the state."""
+        LOGGER.debug("(%s) Completing chore with last_completed: %s", self._attr_name, last_completed)
         self.last_completed = last_completed
         await self._async_load_due_dates()
+        if not self._due_dates:
+            LOGGER.warning(
+                "(%s) No due dates calculated after completion. Check configuration.",
+                self._attr_name,
+            )
         self.update_state()
 
     async def _async_load_due_dates(self) -> None:
         """Load due dates based on the last completed date."""
+        LOGGER.debug("(%s) Loading due dates. Last completed: %s, Start date: %s", 
+                     self._attr_name, self.last_completed, self._start_date)
         if self.last_completed is None:
-            # LOGGER.warning("Chore (%s) last_completed is None, using start_date to calculate due dates", self._attr_name)
+            LOGGER.warning("(%s) Last completed is None. Using start date to calculate due dates.", self._attr_name)
             self._due_dates = [self._add_period_offset(self._start_date)]
         else:
             self._due_dates = [self._add_period_offset(self.last_completed.date())]
+        LOGGER.debug("(%s) Calculated due dates: %s", self._attr_name, self._due_dates)
 
     async def add_date(self, chore_date: date) -> None:
         """Add date to due dates."""
@@ -504,6 +523,10 @@ class Chore(RestoreEntity):
             self._overdue = self._days < 0
             self._overdue_days = 0 if self._days > -1 else abs(self._days)
         else:
+            LOGGER.warning(
+                "(%s) No next_due_date found. State will be set to None.",
+                self._attr_name,
+            )
             self._days = None
             self._attr_state = None
             self._attr_icon = self._icon_normal
@@ -571,9 +594,21 @@ class Chore(RestoreEntity):
                 start_date = earliest_date
 
         return start_date
+        """Add the period offset to the start date."""
 
     def _add_period_offset(self, start_date: date) -> date:
         """Add the period offset to the start date."""
+        if not hasattr(self, "_period") or self._period is None:
+            raise ValueError(f"({self._attr_name}) Period is not configured.")
+        return start_date + timedelta(days=self._period)
+
+        return start_date
+
+    def _add_period_offset(self, start_date: date) -> date:
+        """Add the period offset to the start date."""
+        if not hasattr(self, "_period") or self._period is None:
+            raise ValueError(f"({self._attr_name}) Period is not configured.")
+        return start_date + timedelta(days=self._period)
         if not hasattr(self, "_period") or self._period is None:
             raise ValueError(f"({self._attr_name}) Period is not configured.")
         return start_date + timedelta(days=self._period)
