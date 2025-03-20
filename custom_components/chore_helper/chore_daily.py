@@ -19,6 +19,14 @@ class DailyChore(Chore):
         if not await self._async_ready_for_update() or not self.hass.is_running:
             return
 
+        if not self.entity_id:
+            # Suppress warning if the entity is still initializing
+            if not self.registry_entry:
+                LOGGER.debug("Entity ID is not yet assigned for %s. Initialization in progress.", self._attr_name)
+            else:
+                LOGGER.warning("Entity ID is not assigned for %s. Skipping update.", self._attr_name)
+            return
+
         LOGGER.debug("(%s) Calling update", self._attr_name)
         await self._async_load_due_dates()
         LOGGER.debug(
@@ -35,6 +43,10 @@ class DailyChore(Chore):
 
     def update_state(self) -> None:
         """Pick the first event from chore dates, update attributes."""
+        if not self.entity_id:
+            LOGGER.error("Entity ID is not assigned for %s. Skipping state update.", self._attr_name)
+            return
+
         LOGGER.debug("(%s) Looking for next chore date", self._attr_name)
         self._last_updated = helpers.now()
         today = self._last_updated.date()
