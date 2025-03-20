@@ -239,6 +239,13 @@ class Chore(RestoreEntity):
             ATTR_UNIT_OF_MEASUREMENT: self.native_unit_of_measurement,
             # Needed for translations to work
             ATTR_DEVICE_CLASS: self.DEVICE_CLASS,
+            # Include frequency and period explicitly
+            const.ATTR_FREQUENCY: self._frequency,
+            "period": getattr(self, "_period", None),  # Ensure period is included
+            # Include other initial settings
+            const.ATTR_START_DATE: self._start_date,
+            const.ATTR_FORECAST_DATES: self._forecast_dates,
+            const.ATTR_SHOW_OVERDUE_TODAY: self.show_overdue_today,
         }
 
     @property
@@ -364,7 +371,7 @@ class Chore(RestoreEntity):
     async def _async_load_due_dates(self) -> None:
         """Load due dates based on the last completed date."""
         if self.last_completed is None:
-            LOGGER.warning("Chore (%s) last_completed is None, using start_date to calculate due dates", self._attr_name)
+            # LOGGER.warning("Chore (%s) last_completed is None, using start_date to calculate due dates", self._attr_name)
             self._due_dates = [self._add_period_offset(self._start_date)]
         else:
             self._due_dates = [self._add_period_offset(self.last_completed.date())]
@@ -565,8 +572,8 @@ class Chore(RestoreEntity):
 
         return start_date
 
-    # def _add_period_offset(self, start_date: date) -> date:
-    #     return start_date + timedelta(days=1)
     def _add_period_offset(self, start_date: date) -> date:
         """Add the period offset to the start date."""
+        if not hasattr(self, "_period") or self._period is None:
+            raise ValueError(f"({self._attr_name}) Period is not configured.")
         return start_date + timedelta(days=self._period)

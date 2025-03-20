@@ -12,7 +12,7 @@ class DailyChore(Chore):
         """Read parameters specific for Daily Chore Frequency."""
         super().__init__(config_entry)
         config = config_entry.options
-        self._period = config.get('period')  # Initialize the _period attribute
+        self._period = config.get('period', 1)  # Default to 1 if not provided
 
     async def async_update(self) -> None:
         """Get the latest data and updates the states."""

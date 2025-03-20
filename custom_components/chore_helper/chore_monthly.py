@@ -50,7 +50,7 @@ class MonthlyChore(Chore):
         else:
             self._weekday_order_number = order_number
             self._week_order_number = None
-        self._period = config.get(const.CONF_PERIOD, 1)
+        self._period = config.get(const.CONF_PERIOD, 1)  # Default to 1 if not provided
 
     @staticmethod
     def viable_weeks_in_month(
@@ -182,6 +182,8 @@ class MonthlyChore(Chore):
         )
 
     def _add_period_offset(self, start_date: date) -> date:
+        if self._period is None:
+            raise ValueError(f"({self._attr_name}) Period is not configured.")
         return start_date + relativedelta(months=self._period)
 
     def _find_candidate_date(self, day1: date) -> date | None:
