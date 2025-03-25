@@ -4,6 +4,7 @@ from . import helpers
 from datetime import date, timedelta, datetime
 from dateutil.relativedelta import relativedelta
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.util.dt import now as ha_now  # Import Home Assistant's timezone-aware `now`
 
 class DailyChore(Chore):
     """Entity for a daily chore."""
@@ -17,6 +18,14 @@ class DailyChore(Chore):
     async def async_update(self) -> None:
         """Get the latest data and updates the states."""
         if not await self._async_ready_for_update() or not self.hass.is_running:
+            return
+
+        if not self.entity_id:
+            # Suppress warning if the entity is still initializing
+            if not self.registry_entry:
+                LOGGER.debug("Entity ID is not yet assigned for %s. Initialization in progress.", self._attr_name)
+            else:
+                LOGGER.warning("Entity ID is not assigned for %s. Skipping update.", self._attr_name)
             return
 
         LOGGER.debug("(%s) Calling update", self._attr_name)
@@ -35,8 +44,12 @@ class DailyChore(Chore):
 
     def update_state(self) -> None:
         """Pick the first event from chore dates, update attributes."""
+        if not self.entity_id:
+            LOGGER.error("Entity ID is not assigned for %s. Skipping state update.", self._attr_name)
+            return
+
         LOGGER.debug("(%s) Looking for next chore date", self._attr_name)
-        self._last_updated = helpers.now()
+        self._last_updated = ha_now()  # Use timezone-aware `now`
         today = self._last_updated.date()
         self._next_due_date = self.get_next_due_date(self._calculate_start_date())
         if self._next_due_date is not None:
@@ -104,8 +117,15 @@ class DailyChore(Chore):
         schedule_start_date = self._calculate_schedule_start_date()
         day1 = self.calculate_day1(day1, schedule_start_date)
 
+        if schedule_start_date is None or self._period is None:
+            LOGGER.error(
+                "(%s) Missing schedule_start_date or period configuration.",
+                self._attr_name,
+            )
+            return None
+
         try:
-            remainder = (day1 - schedule_start_date).days % self._period  # type: ignore
+            remainder = (day1 - schedule_start_date).days % self._period
             if remainder == 0:
                 return day1
             offset = self._period - remainder
@@ -115,7 +135,23 @@ class DailyChore(Chore):
                 "for every-n-days or after-n-days chore frequency."
             ) from error
 
-        return day1 + relativedelta(days=offset)
+        candidate_date = day1 + relativedelta(days=offset)
+        LOGGER.debug(
+            "(%s) Calculated candidate date: day1=%s, schedule_start_date=%s, candidate_date=%s",
+            self._attr_name,
+            day1,
+            schedule_start_date,
+            candidate_date,
+        )
+        return candidate_date
 
-    def _add_period_offset(self, start_date: date) -> date:
-        return start_date + timedelta(days=self._period)
+    async def complete(self, last_completed: datetime) -> None:
+        """Mark the chore as completed and update the state."""
+        self.last_completed = last_completed
+        await self._async_load_due_dates()
+        if not self._due_dates:
+            LOGGER.warning(
+                "(%s) No due dates calculated after completion. Check configuration.",
+                self._attr_name,
+            )
+        self.update_state()

@@ -22,6 +22,7 @@ import voluptuous as vol
 
 from . import const, helpers
 from .const import LOGGER
+from homeassistant.helpers.template import Template
 
 PLATFORMS: list[str] = [const.SENSOR_PLATFORM]
 
@@ -184,13 +185,25 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def handle_complete_chore(call: ServiceCall) -> None:
         """Handle the complete_chore service call."""
         entity_ids = call.data.get(CONF_ENTITY_ID, [])
-        last_completed = call.data.get(const.ATTR_LAST_COMPLETED, helpers.now())
+        last_completed = call.data.get(const.ATTR_LAST_COMPLETED, None)
+
+        LOGGER.debug("Handling complete_chore. Entity IDs: %s, Last completed: %s", entity_ids, last_completed)
+
+        # Evaluate the template if last_completed is a template string
+        if isinstance(last_completed, Template):
+            last_completed.hass = hass
+            last_completed = last_completed.async_render()
+
+        LOGGER.debug("Evaluated last_completed value: %s", last_completed)
+
+        # Default to current time if last_completed is None
+        last_completed = last_completed or helpers.now()
+
         for entity_id in entity_ids:
-            LOGGER.debug("called complete for %s", entity_id)
+            LOGGER.debug("Completing chore for entity: %s", entity_id)
             try:
                 entity = hass.data[const.DOMAIN][const.SENSOR_PLATFORM][entity_id]
-                entity.last_completed = dt_util.as_local(last_completed)
-                entity.update_state()
+                await entity.complete(last_completed)
             except KeyError as err:
                 LOGGER.error(
                     "Failed setting last completed for %s - %s", entity_id, err
